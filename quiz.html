@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="pl">
 <head>
@@ -172,6 +171,13 @@
       const summaryDiv = document.getElementById("summary");
       summaryDiv.style.display = "block";
       summaryDiv.innerHTML = "<h2>Podsumowanie</h2>";
+
+      const correctCount = userAnswers.filter(a => a.correct).length;
+      const incorrectCount = userAnswers.length - correctCount;
+
+      const stats = document.createElement("p");
+      stats.innerHTML = `Poprawnych odpowiedzi: <strong>${correctCount}</strong><br>Błędnych odpowiedzi: <strong>${incorrectCount}</strong>`;
+      summaryDiv.appendChild(stats);
 
       const restartIncorrectBtn = document.createElement("button");
       restartIncorrectBtn.id = "restartIncorrect";
