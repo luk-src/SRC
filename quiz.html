@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <title>Quiz z Google Sheets</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: auto; }
+    .question { font-weight: bold; margin-bottom: 10px; }
+    .answers { margin-bottom: 20px; }
+    .answers button {
+      padding: 10px 20px;
+      font-size: 16px;
+      width: 100%;
+      margin-bottom: 10px;
+      text-align: left;
+    }
+    button#next, button#end, button#restartIncorrect, button#restartAll {
+      padding: 10px 20px;
+      font-size: 16px;
+      margin: 10px 10px 10px 0;
+    }
+    .summary-question {
+      margin-top: 10px;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    .correct-answer {
+      color: green;
+    }
+    .incorrect {
+      background-color: #ffe5e5;
+      border-color: #ff9999;
+    }
+    #progress {
+      margin-bottom: 15px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>Quiz</h1>
+  <div id="quiz-container">
+    <div id="progress"></div>
+    <div id="question" class="question"></div>
+    <div id="answers" class="answers"></div>
+    <div id="feedback"></div>
+    <button id="next" style="display:none">Następne pytanie</button>
+    <button id="end">Zakończ quiz</button>
+  </div>
+  <div id="score" style="display:none"></div>
+  <div id="summary" style="display:none"></div>
+
+  <script>
+    const sheetID = "1Bz_7GSqOmWtP54CdpqYu18lJOkqLkmnBtB6SOvCqveY";
+    const sheetName = "Arkusz1";
+    const url = `https://docs.google.com/spreadsheets/d/${sheetID}/gviz/tq?sheet=${sheetName}`;
+
+    let originalData = [];
+    let quizData = [];
+    let current = 0;
+    let score = 0;
+    let userAnswers = [];
+
+    function shuffleArray(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+    }
+
+    function fetchData(callback) {
+      fetch(url)
+        .then(res => res.text())
+        .then(rep => {
+          const json = JSON.parse(rep.substring(47).slice(0, -2));
+          const rows = json.table.rows;
+          originalData = rows.map(row => {
+            return {
+              question: row.c[0].v,
+              answers: [row.c[1].v, row.c[2].v, row.c[3].v],
+              correctIndex: parseInt(row.c[4].v)
+            };
+          });
+          resetQuiz(originalData);
+          callback();
+        });
+    }
+
+    function resetQuiz(data) {
+      quizData = [...data];
+      shuffleArray(quizData);
+      current = 0;
+      score = 0;
+      userAnswers = [];
+    }
+
+    function showQuestion() {
+      const q = quizData[current];
+      document.getElementById("progress").innerText = `Pytanie ${current + 1} z ${quizData.length}`;
+      document.getElementById("question").innerText = q.question;
+      const answersDiv = document.getElementById("answers");
+      answersDiv.innerHTML = "";
+      document.getElementById("feedback").innerText = "";
+      document.getElementById("next").style.display = "none";
+
+      q.answers.forEach((ans, idx) => {
+        const btn = document.createElement("button");
+        btn.innerText = ans;
+        btn.onclick = () => checkAnswer(idx);
+        answersDiv.appendChild(btn);
+      });
+    }
+
+    function checkAnswer(selectedIndex) {
+      const q = quizData[current];
+      const feedback = document.getElementById("feedback");
+      const isCorrect = selectedIndex === q.correctIndex;
+      userAnswers.push({
+        question: q.question,
+        answers: q.answers,
+        correctIndex: q.correctIndex,
+        selectedIndex: selectedIndex,
+        correct: isCorrect
+      });
+
+      if (isCorrect) {
+        feedback.innerText = "Poprawnie!";
+        score++;
+      } else {
+        feedback.innerText = `Błąd! Poprawna odpowiedź: ${q.answers[q.correctIndex]}`;
+      }
+      document.querySelectorAll("#answers button").forEach(btn => btn.disabled = true);
+      if (current < quizData.length - 1) {
+        document.getElementById("next").style.display = "inline-block";
+      }
+    }
+
+    document.getElementById("next").onclick = () => {
+      current++;
+      showQuestion();
+    }
+
+    document.getElementById("end").onclick = () => {
+      document.getElementById("quiz-container").style.display = "none";
+      document.getElementById("score").style.display = "block";
+      document.getElementById("score").innerText = `Twój wynik: ${score} / ${quizData.length}`;
+      showSummary();
+    }
+
+    function showSummary() {
+      const summaryDiv = document.getElementById("summary");
+      summaryDiv.style.display = "block";
+      summaryDiv.innerHTML = "<h2>Podsumowanie</h2>";
+
+      const restartIncorrectBtn = document.createElement("button");
+      restartIncorrectBtn.id = "restartIncorrect";
+      restartIncorrectBtn.innerText = "Powtórz tylko błędne pytania";
+      restartIncorrectBtn.onclick = restartIncorrect;
+      summaryDiv.appendChild(restartIncorrectBtn);
+
+      const restartAllBtn = document.createElement("button");
+      restartAllBtn.id = "restartAll";
+      restartAllBtn.innerText = "Uruchom od nowa";
+      restartAllBtn.onclick = () => {
+        resetQuiz(originalData);
+        document.getElementById("quiz-container").style.display = "block";
+        document.getElementById("score").style.display = "none";
+        document.getElementById("summary").style.display = "none";
+        showQuestion();
+      };
+      summaryDiv.appendChild(restartAllBtn);
+
+      userAnswers.forEach((item, index) => {
+        const div = document.createElement("div");
+        div.className = "summary-question" + (item.correct ? "" : " incorrect");
+        div.innerHTML = `<strong>${index + 1}. ${item.question}</strong><br>` +
+          `Twoja odpowiedź: ${item.answers[item.selectedIndex] || "brak"} <br>` +
+          `Poprawna odpowiedź: <span class="correct-answer">${item.answers[item.correctIndex]}</span>`;
+        summaryDiv.appendChild(div);
+      });
+    }
+
+    function restartIncorrect() {
+      const incorrectQuestions = userAnswers.filter(ans => !ans.correct).map(ans => {
+        return {
+          question: ans.question,
+          answers: ans.answers,
+          correctIndex: ans.correctIndex
+        };
+      });
+      if (incorrectQuestions.length === 0) {
+        alert("Nie ma żadnych błędnych odpowiedzi do powtórzenia!");
+        return;
+      }
+      resetQuiz(incorrectQuestions);
+      document.getElementById("quiz-container").style.display = "block";
+      document.getElementById("score").style.display = "none";
+      document.getElementById("summary").style.display = "none";
+      showQuestion();
+    }
+
+    fetchData(() => showQuestion());
+  </script>
+</body>
+</html>
